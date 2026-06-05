@@ -1,31 +1,19 @@
 // ===================================
-// 🔥 ALEXA AI ULTRA PRO MAX
+// 🔥 ALEXA AI (NO DATABASE VERSION)
 // ===================================
 
 const express = require("express");
 const bodyParser = require("body-parser");
 const axios = require("axios");
-const mongoose = require("mongoose");
 
 const app = express();
 app.use(bodyParser.json());
 
 // ================= ENV =================
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const MONGO_URI = process.env.MONGO_URI;
 
-// ================= DB =================
-mongoose.connect(MONGO_URI);
-
-const UserSchema = new mongoose.Schema({
-    userId: String,
-    name: String,
-    personality: { type: String, default: "iraqi" },
-    messages: Array,
-    lastSeen: Date
-});
-
-const User = mongoose.model("User", UserSchema);
+// ================= MEMORY (بديل MongoDB) =================
+let memory = {};
 
 // ================= PERSONALITY =================
 function getPersonality(type) {
@@ -56,7 +44,7 @@ ${getPersonality(user.personality)}
 - ترد طبيعي جداً مثل إنسان
 `
         },
-        ...user.messages.slice(-12)
+        ...user.messages.slice(-10)
     ];
 
     const response = await axios.post(
@@ -76,9 +64,6 @@ ${getPersonality(user.personality)}
     const reply = response.data.choices[0].message.content;
 
     user.messages.push({ role: "assistant", content: reply });
-    user.lastSeen = new Date();
-
-    await user.save();
 
     return reply;
 }
@@ -116,18 +101,19 @@ app.post("/", async (req, res) => {
             req.body.request.intent.slots.question.value || "مرحبا";
     } catch (e) {}
 
-    let user = await User.findOne({ userId });
-
-    if (!user) {
-        user = new User({
-            userId,
-            messages: []
-        });
+    // 🧠 إنشاء ذاكرة مؤقتة
+    if (!memory[userId]) {
+        memory[userId] = {
+            messages: [],
+            personality: "iraqi"
+        };
     }
 
+    let user = memory[userId];
+
+    // 🎯 أوامر
     const command = handleCommands(userText, user);
     if (command) {
-        await user.save();
         return res.json({
             version: "1.0",
             response: {
@@ -139,8 +125,10 @@ app.post("/", async (req, res) => {
         });
     }
 
+    // 🤖 AI
     const reply = await askAI(user, userText);
 
+    // 🔊 صوت
     const ssml = `
 <speak>
   <voice name="Zeina">
@@ -164,4 +152,4 @@ app.post("/", async (req, res) => {
 
 // ================= RUN =================
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("🔥 ULTRA AI RUNNING"));
+app.listen(PORT, () => console.log("🔥 AI RUNNING WITHOUT DB"));
